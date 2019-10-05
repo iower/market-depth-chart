@@ -1,43 +1,59 @@
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-
+<style>
+	.plot-place {
+		display: inline-block;
+	}
+	#plot {
+		border: 1px solid gray;
+	}
+	#mid-price {
+		text-align: center;
+	}
+</style>
 
 <h1>BTCUSDT depth @ Binance</h1>
-<div id="plot"></div>
+
+<div>
+	<div class="plot-place">
+		<canvas id="plot"></canvas>
+		<div id="mid-price">Loading...</div>
+	</div>
+</div>
 
 <script>
 
+const useTestData = false;
+
 const url = 'wss://stream.binance.com:9443/ws/btcusdt@depth20';
 
+if (!useTestData) {
+	
+	const socket = new WebSocket(url);
+	
+	socket.onopen = function(e) {
+		console.log('opened');
+	};
+	
+	socket.onmessage = function(event) {
+		console.log('received', event.data);
+		draw(JSON.parse(event.data));
+	};
+	
+	socket.onclose = function(event) {
+		console.log(`Closed, clean ${event.wasClean} code ${event.code} reason ${event.reason}`);
+	};
+	
+	socket.onerror = function(error) {
+		console.error(`Error ${error.message}`);
+	};
+	
+}
 
-const socket = new WebSocket(url);
-
-socket.onopen = function(e) {
-	console.log('opened');
-};
-
-socket.onmessage = function(event) {
-	console.log('received', event.data);
-	draw(JSON.parse(event.data));
-};
-
-socket.onclose = function(event) {
-	console.log(`Closed, clean ${event.wasClean} code ${event.code} reason ${event.reason}`);
-};
-
-socket.onerror = function(error) {
-	console.error(`Error ${error.message}`);
-};
 
 
-
-
-/*
-const testData = {"lastUpdateId":1144650099,"bids":[["8143.37000000","0.01097800"],["8143.06000000","0.24867600"],["8143.01000000","6.10577200"],["8142.64000000","0.50000000"],["8142.05000000","9.42614100"],["8141.83000000","3.14205700"],["8141.61000000","5.00000000"],["8140.50000000","0.12275800"],["8140.49000000","0.52090500"],["8140.48000000","0.29463200"],["8139.83000000","0.29460400"],["8139.80000000","0.18078300"],["8139.00000000","0.07793600"],["8138.57000000","0.07593500"],["8138.54000000","0.30000000"],["8138.52000000","0.40000000"],["8138.35000000","0.11202400"],["8138.13000000","0.12290600"],["8138.12000000","0.39743800"],["8138.11000000","0.47204500"]],"asks":[["8144.57000000","0.04478800"],["8144.58000000","0.04911400"],["8144.60000000","0.00659500"],["8144.61000000","0.06710600"],["8145.00000000","0.49175000"],["8146.99000000","0.70697200"],["8147.00000000","0.10000000"],["8147.22000000","0.00500000"],["8147.50000000","0.50000000"],["8147.61000000","0.48849700"],["8147.62000000","0.46056400"],["8147.63000000","0.29471400"],["8147.64000000","0.46662300"],["8147.65000000","0.10700000"],["8148.04000000","0.50000000"],["8148.64000000","0.83144500"],["8148.66000000","0.68263300"],["8148.98000000","0.05112800"],["8149.00000000","0.61265700"],["8149.08000000","0.61202600"]]};
-*/
 
 
 const prepareSeries = (seriesRaw) => {
-	console.log(seriesRaw);
+	//console.log(seriesRaw);
 	const series = seriesRaw.map((item) => {
 		return {
 			price: +item[0],
@@ -56,23 +72,185 @@ const prepareSeries = (seriesRaw) => {
 
 const draw = (data) => {
 	
-	const bids = prepareSeries(data.bids).reverse();
+	const bids = prepareSeries(data.bids);
 	const asks = prepareSeries(data.asks);
 	
-	console.log('bids:', bids);
-	console.log('asks:', asks);
+	const midPrice = (bids[0].price + asks[0].price) / 2;
+	document.getElementById('mid-price').innerHTML = midPrice.toFixed(2);
 	
-	const points = bids.concat(asks);
+	const priceAmp = Math.max(
+		Math.abs(midPrice - bids[bids.length-1].price),
+		Math.abs(midPrice - asks[asks.length-1].price),
+	);
 	
-	const plotData = [{
-		x: points.map(item => item.price),
-		y: points.map(item => item.volumeCombined),
-		type: 'scatter'
-	}];
+	const volumeAmp = Math.max(
+		bids[bids.length-1].volumeCombined,
+		asks[asks.length-1].volumeCombined,
+	);
 	
-	Plotly.newPlot('plot', plotData);
+	console.log('priceAmp', priceAmp);
+	console.log('volumeAmp', volumeAmp);
+	
+	
+	const mapSide = data => data.map(item => [
+		(item.price - midPrice) / priceAmp,
+		item.volumeCombined / volumeAmp,
+	]);
+	
+	
+	const canvas = {
+		
+		width: 400,
+		height: 200,
+		element: document.getElementById('plot'),
+		ctx: document.getElementById('plot').getContext('2d'),
+		
+		drawLine: (coord1, coord2) => {
+			
+			const coords1projected = canvas.projectCoord(coord1);
+			const coords2projected = canvas.projectCoord(coord2);
+			//console.log(coords1projected, coords2projected);
+			
+			canvas.ctx.beginPath();
+			canvas.ctx.moveTo(coords1projected[0], coords1projected[1]);
+			canvas.ctx.lineTo(coords2projected[0], coords2projected[1]);
+			canvas.ctx.stroke();
+		},
+		
+		projectCoord: (coord) => {
+			return [
+				canvas.width / 2 + coord[0] * canvas.width / 2,
+				canvas.height - coord[1] * canvas.height,
+			];
+		},
+		
+		drawSide: (coords, type) => {
+			
+			console.log('coords', type, coords);
+			
+			const firstPoint = coords[0];
+			const lastPoint = coords[coords.length - 1];
+			
+			const startCoord = [firstPoint[0], 0];
+			const finishCoord = [lastPoint[0], 0];
+			
+			console.log('startCoord', startCoord)
+			console.log('finishCoord', finishCoord)
+			
+			const startPlace = canvas.projectCoord(startCoord);
+			const finishPlace = canvas.projectCoord(finishCoord);
+			
+			canvas.ctx.beginPath();
+			canvas.ctx.moveTo(startPlace[0], startPlace[1]);
+			
+			let prevPointPlace;
+			
+			coords.forEach(coord => {
+				const pointPlace = canvas.projectCoord(coord);
+				if (prevPointPlace) {
+					canvas.ctx.lineTo(pointPlace[0], prevPointPlace[1]);
+				}
+				canvas.ctx.lineTo(pointPlace[0], pointPlace[1]);
+				prevPointPlace = pointPlace;
+			});
+			
+			canvas.ctx.lineTo(finishPlace[0], finishPlace[1]);
+			
+			let lineColor, fillColor;
+			
+			if (type == 'bids') {
+				lineColor = '#aaffaaff';
+				fillColor = '#aaffaa88';
+			}
+			
+			if (type == 'asks') {
+				lineColor = '#ffaaaaff';
+				fillColor = '#ffaaaa88';
+			}
+			
+			canvas.ctx.closePath();
+			canvas.ctx.strokeStyle = lineColor;
+			canvas.ctx.stroke();
+			canvas.ctx.fillStyle = fillColor;
+			canvas.ctx.fill();
+		},
+		
+		draw: () => {
+			canvas.drawLine([0, 0], [0, 1]);
+		},
+		
+		init: () => {
+			canvas.element.width = canvas.width;
+			canvas.element.height = canvas.height;
+		},
+		
+	}
+	
+	canvas.init();
+	canvas.draw();
+	
+	canvas.drawSide(mapSide(bids), 'bids');
+	canvas.drawSide(mapSide(asks), 'asks');
 	
 };
+
+const testData = {
+	"lastUpdateId": 1144650099,
+	"bids": [
+		["8143.37000000","0.01097800"],
+		["8143.06000000","0.24867600"],
+		["8143.01000000","6.10577200"],
+		["8142.64000000","0.50000000"],
+		["8142.05000000","9.42614100"],
+		["8141.83000000","3.14205700"],
+		["8141.61000000","5.00000000"],
+		["8140.50000000","0.12275800"],
+		["8140.49000000","0.52090500"],
+		["8140.48000000","0.29463200"],
+		["8139.83000000","0.29460400"],
+		["8139.80000000","0.18078300"],
+		["8139.00000000","0.07793600"],
+		["8138.57000000","0.07593500"],
+		["8138.54000000","0.30000000"],
+		["8138.52000000","0.40000000"],
+		["8138.35000000","0.11202400"],
+		["8138.13000000","0.12290600"],
+		["8138.12000000","0.39743800"],
+		["8138.11000000","0.47204500"]
+	],
+	"asks":[
+		["8144.57000000","0.04478800"],
+		["8144.58000000","0.04911400"],
+		["8144.60000000","0.00659500"],
+		["8144.61000000","0.06710600"],
+		["8145.00000000","0.49175000"],
+		["8146.99000000","0.70697200"],
+		["8147.00000000","0.10000000"],
+		["8147.22000000","0.00500000"],
+		["8147.50000000","0.50000000"],
+		["8147.61000000","0.48849700"],
+		["8147.62000000","0.46056400"],
+		["8147.63000000","0.29471400"],
+		["8147.64000000","0.46662300"],
+		["8147.65000000","0.10700000"],
+		["8148.04000000","0.50000000"],
+		["8148.64000000","0.83144500"],
+		["8148.66000000","0.68263300"],
+		["8148.98000000","0.05112800"],
+		["8149.00000000","0.61265700"],
+		["8149.08000000","0.61202600"]
+	]
+};
+
+
+if (useTestData) {
+	draw(testData);
+}
+
+
+
+
+
 
 
 </script>
