@@ -1,52 +1,57 @@
-<style>
-	.plot-place {
-		display: inline-block;
-	}
-	#plot {
-		border: 1px solid gray;
-	}
-	#mid-price {
-		text-align: center;
-	}
-</style>
-
-<h1>BTCUSDT depth @ Binance</h1>
-
-<div>
+class MarketDepthChart {
+	
+	canvas = null;
+	
+	innerMarkup = 
+`<div>
+	<style>
+		.plot-place {
+			display: inline-block;
+		}
+		#plot {
+			border: 1px solid gray;
+		}
+		#mid-price {
+			text-align: center;
+		}
+	</style>
 	<div class="plot-place">
 		<canvas id="plot"></canvas>
 		<div id="mid-price">Loading...</div>
 	</div>
 </div>
+`;
+	
+	constructor({ element, data }) {
+		element.innerHTML = this.innerMarkup;
+		this.canvas = element.querySelector('canvas');
+	}
+	
+	// todo
+	
+}
 
-<script>
-
-const useTestData = false;
 
 const url = 'wss://stream.binance.com:9443/ws/btcusdt@depth20';
 
-if (!useTestData) {
-	
-	const socket = new WebSocket(url);
-	
-	socket.onopen = function(e) {
-		console.log('opened');
-	};
-	
-	socket.onmessage = function(event) {
-		console.log('received', event.data);
-		draw(JSON.parse(event.data));
-	};
-	
-	socket.onclose = function(event) {
-		console.log(`Closed, clean ${event.wasClean} code ${event.code} reason ${event.reason}`);
-	};
-	
-	socket.onerror = function(error) {
-		console.error(`Error ${error.message}`);
-	};
-	
-}
+const socket = new WebSocket(url);
+
+socket.onopen = function(e) {
+	console.log('opened');
+};
+
+socket.onmessage = function(event) {
+	console.log('received', event.data);
+	draw(JSON.parse(event.data));
+};
+
+socket.onclose = function(event) {
+	console.log(`Closed, clean ${event.wasClean} code ${event.code} reason ${event.reason}`);
+};
+
+socket.onerror = function(error) {
+	console.error(`Error ${error.message}`);
+};
 
 
 
@@ -193,64 +198,3 @@ const draw = (data) => {
 	canvas.drawSide(mapSide(asks), 'asks');
 	
 };
-
-const testData = {
-	"lastUpdateId": 1144650099,
-	"bids": [
-		["8143.37000000","0.01097800"],
-		["8143.06000000","0.24867600"],
-		["8143.01000000","6.10577200"],
-		["8142.64000000","0.50000000"],
-		["8142.05000000","9.42614100"],
-		["8141.83000000","3.14205700"],
-		["8141.61000000","5.00000000"],
-		["8140.50000000","0.12275800"],
-		["8140.49000000","0.52090500"],
-		["8140.48000000","0.29463200"],
-		["8139.83000000","0.29460400"],
-		["8139.80000000","0.18078300"],
-		["8139.00000000","0.07793600"],
-		["8138.57000000","0.07593500"],
-		["8138.54000000","0.30000000"],
-		["8138.52000000","0.40000000"],
-		["8138.35000000","0.11202400"],
-		["8138.13000000","0.12290600"],
-		["8138.12000000","0.39743800"],
-		["8138.11000000","0.47204500"]
-	],
-	"asks":[
-		["8144.57000000","0.04478800"],
-		["8144.58000000","0.04911400"],
-		["8144.60000000","0.00659500"],
-		["8144.61000000","0.06710600"],
-		["8145.00000000","0.49175000"],
-		["8146.99000000","0.70697200"],
-		["8147.00000000","0.10000000"],
-		["8147.22000000","0.00500000"],
-		["8147.50000000","0.50000000"],
-		["8147.61000000","0.48849700"],
-		["8147.62000000","0.46056400"],
-		["8147.63000000","0.29471400"],
-		["8147.64000000","0.46662300"],
-		["8147.65000000","0.10700000"],
-		["8148.04000000","0.50000000"],
-		["8148.64000000","0.83144500"],
-		["8148.66000000","0.68263300"],
-		["8148.98000000","0.05112800"],
-		["8149.00000000","0.61265700"],
-		["8149.08000000","0.61202600"]
-	]
-};
-
-
-if (useTestData) {
-	draw(testData);
-}
-
-
-
-
-
-
-
-</script>
